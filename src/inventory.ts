@@ -1,12 +1,13 @@
 import { supabase } from './supabase'
+import type { Category } from './category'
 
 export type Place = 'fridge' | 'freezer'
 export type DateKind = 'label' | 'estimate'
-export type Item = { id: string; name: string; barcode?: string; quantity: string; place: Place; date: string; dateKind: DateKind; addedAt: string }
+export type Item = { id: string; name: string; barcode?: string; quantity: string; category: Category; place: Place; date: string; dateKind: DateKind; addedAt: string }
 
-type InventoryRow = { id: string; owner_id: string; household_id: string | null; name: string; barcode: string | null; quantity: string; place: Place; date: string | null; date_kind: DateKind; added_at: string }
-const toItem = (row: InventoryRow): Item => ({ id: row.id, name: row.name, barcode: row.barcode || undefined, quantity: row.quantity, place: row.place, date: row.date || '', dateKind: row.date_kind, addedAt: row.added_at })
-const toRow = (item: Item, ownerId: string, householdId: string | null) => ({ id: item.id, owner_id: ownerId, household_id: householdId, name: item.name, barcode: item.barcode || null, quantity: item.quantity, place: item.place, date: item.date || null, date_kind: item.dateKind, added_at: item.addedAt })
+type InventoryRow = { id: string; owner_id: string; household_id: string | null; name: string; barcode: string | null; quantity: string; category: Category; place: Place; date: string | null; date_kind: DateKind; added_at: string }
+const toItem = (row: InventoryRow): Item => ({ id: row.id, name: row.name, barcode: row.barcode || undefined, quantity: row.quantity, category: row.category || 'other', place: row.place, date: row.date || '', dateKind: row.date_kind, addedAt: row.added_at })
+const toRow = (item: Item, ownerId: string, householdId: string | null) => ({ id: item.id, owner_id: ownerId, household_id: householdId, name: item.name, barcode: item.barcode || null, quantity: item.quantity, category: item.category || 'other', place: item.place, date: item.date || null, date_kind: item.dateKind, added_at: item.addedAt })
 
 export async function loadCloudInventory(ownerId: string, householdId: string | null, localItems: Item[], localKnown: Record<string, string>) {
   if (localItems.length) {
@@ -34,7 +35,7 @@ export async function loadCloudInventory(ownerId: string, householdId: string | 
 export async function saveCloudItem(ownerId: string, householdId: string | null, item: Item, editing: boolean) {
   const row = toRow(item, ownerId, householdId)
   const { error } = editing
-    ? await supabase.from('inventory_items').update({ name: row.name, barcode: row.barcode, quantity: row.quantity, place: row.place, date: row.date, date_kind: row.date_kind }).eq('id', item.id)
+    ? await supabase.from('inventory_items').update({ name: row.name, barcode: row.barcode, quantity: row.quantity, category: row.category, place: row.place, date: row.date, date_kind: row.date_kind }).eq('id', item.id)
     : await supabase.from('inventory_items').insert(row)
   if (error) throw error
   if (item.barcode) {

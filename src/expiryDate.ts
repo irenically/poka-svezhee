@@ -7,6 +7,11 @@ function isoDate(year: number, month: number, day: number): string | null {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+export function isValidISODate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return !!match && isoDate(Number(match[1]), Number(match[2]), Number(match[3])) === value
+}
+
 function yearValue(value: string) {
   return value.length === 2 ? 2000 + Number(value) : Number(value)
 }

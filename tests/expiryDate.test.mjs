@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractDateCandidates, suggestedDate } from '../src/expiryDate.ts'
+import { extractDateCandidates, isValidISODate, suggestedDate } from '../src/expiryDate.ts'
 
 test('reads common European expiry date formats', () => {
   for (const text of ['Годен до 25.12.2026', 'Use by 25/12/26', 'Best before 2026-12-25']) {
@@ -25,4 +25,6 @@ test('does not guess between two unlabelled dates', () => {
 
 test('rejects impossible calendar dates', () => {
   assert.deepEqual(extractDateCandidates('31.02.2027'), [])
+  assert.equal(isValidISODate('2027-02-31'), false)
+  assert.equal(isValidISODate('2026-11-15'), true)
 })
