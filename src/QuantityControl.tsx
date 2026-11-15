@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Box, FormControl, IconButton, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material'
+import { Box, FormControl, IconButton, MenuItem, Select, Stack, TextField, Typography } from '@mui/material'
 import { Minus, Plus } from 'lucide-react'
 import { formatQuantity, minimumQuantity, parseQuantity, quantityStep, units, type Unit } from './quantity'
 
@@ -49,7 +49,7 @@ export function QuantityControl({ value, onChange }: { value: string; onChange: 
         <TextField variant="standard" value={amount} onChange={event => changeAmount(event.target.value)} onBlur={() => { const parsed = Number(amount.replace(',', '.')); if (Number.isFinite(parsed) && parsed >= minimumQuantity(unit)) commit(parsed, unit) }} inputProps={{ inputMode: 'decimal', 'aria-labelledby': 'quantity-label', pattern: '[0-9]+([.,][0-9]+)?' }} sx={{ width: 54, '& input': { textAlign: 'center', p: 0 }, '& .MuiInput-root::before, & .MuiInput-root::after': { display: 'none' } }} />
         <IconButton size="small" onClick={() => step(1)} aria-label="Увеличить количество" sx={{ width: 40, height: 40, color: 'primary.main' }}><Plus size={18} /></IconButton>
       </Box>
-      <FormControl size="small" sx={{ minWidth: 83 }}><InputLabel id="quantity-unit-label">Единица</InputLabel><Select labelId="quantity-unit-label" value={unit} label="Единица" onChange={event => { const next = event.target.value as Unit; const current = Number(amount.replace(',', '.')) || minimumQuantity(next); commit(next === 'шт' ? Math.max(1, Math.round(current)) : Math.max(minimumQuantity(next), current), next) }}>{units.map(option => <MenuItem key={option} value={option}>{option}</MenuItem>)}</Select></FormControl>
+      <FormControl size="small" sx={{ width: 78 }}><Select value={unit} inputProps={{ 'aria-label': 'Единица измерения' }} onChange={event => { const next = event.target.value as Unit; const current = Number(amount.replace(',', '.')) || minimumQuantity(next); commit(next === 'шт' ? Math.max(1, Math.round(current)) : Math.max(minimumQuantity(next), current), next) }}>{units.map(option => <MenuItem key={option} value={option}>{option}</MenuItem>)}</Select></FormControl>
     </Stack>
     {legacy && <Typography variant="caption" color="text.secondary">Раньше было: {legacy}. Нажми «+» или выбери единицу, чтобы заменить.</Typography>}
   </Box>
