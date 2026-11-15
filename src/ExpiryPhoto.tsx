@@ -1,7 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
+import type { Worker } from 'tesseract.js'
 import { Alert, Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
 import { extractDateCandidates, suggestedDate, type DateCandidate } from './expiryDate'
 import { packageNameCandidates } from './packageName'
+
+async function imageForOcr(file: File): Promise<File | Blob> {
+  try {
+    const image = await createImageBitmap(file)
+    const scale = Math.min(1, 1800 / Math.max(image.width, image.height))
+    if (scale === 1) { image.close(); return file }
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(image.width * scale)
+    canvas.height = Math.round(image.height * scale)
+    canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height)
+    image.close()
+    return await new Promise<Blob>(resolve => canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.88))
+  } catch { return file }
+}
 
 export function ExpiryPhoto({ onDate, onBusyChange, onName, onPhotoIntent, currentName, medicineMode = false }: { onDate: (date: string) => void; onBusyChange: (busy: boolean) => void; onName: (name: string) => void; onPhotoIntent: () => void; currentName: string; medicineMode?: boolean }) {
   const [busy, setBusy] = useState(false)
@@ -13,7 +28,7 @@ export function ExpiryPhoto({ onDate, onBusyChange, onName, onPhotoIntent, curre
   const [nameCandidates, setNameCandidates] = useState<string[]>([])
   const [selectedName, setSelectedName] = useState('')
   const alive = useRef(true)
-  const workerRef = useRef<{ terminate: () => Promise<unknown> } | null>(null)
+  const workerRef = useRef<Worker | null>(null)
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; void workerRef.current?.terminate().catch(() => {}) } }, [])
 
@@ -22,17 +37,20 @@ export function ExpiryPhoto({ onDate, onBusyChange, onName, onPhotoIntent, curre
     setError(''); setCandidates([]); setNameCandidates([]); setRecognized(''); setSelected(''); setSelectedName('')
     if (!file.type.startsWith('image/')) { setError('Выбери изображение упаковки.'); return }
     if (file.size > 20 * 1024 * 1024) { setError('Фото слишком большое. Выбери файл до 20 МБ.'); return }
-    setBusy(true); onBusyChange(true); setProgress('Загружаем распознавание…')
+    setBusy(true); onBusyChange(true); setProgress('Подготавливаем фото…')
     try {
+      const image = await imageForOcr(file)
+      if (!alive.current) return
       const { createWorker } = await import('tesseract.js')
-      const worker = await createWorker(['lit', 'eng', 'rus'], 1, {
+      if (!workerRef.current) setProgress('Загружаем распознавание…')
+      const worker = workerRef.current || await createWorker(['lit', 'eng', 'rus'], 1, {
         logger: event => {
           if (alive.current && event.status === 'recognizing text') setProgress(`Читаем упаковку: ${Math.round(event.progress * 100)}%`)
         },
       })
       workerRef.current = worker
       if (!alive.current) { await worker.terminate(); return }
-      const result = await worker.recognize(file, { rotateAuto: true })
+      const result = await worker.recognize(image, { rotateAuto: true })
       if (!alive.current) return
       const text = result.data.text.trim()
       const dates = extractDateCandidates(text, medicineMode)
@@ -46,10 +64,10 @@ export function ExpiryPhoto({ onDate, onBusyChange, onName, onPhotoIntent, curre
       if (!dates.length && !names.length) setError('Не удалось распознать название или дату. Попробуй снять упаковку ближе при хорошем свете или введи вручную.')
       else if (!dates.length) setError('Название найдено, а дата нет. Можно снять сторону упаковки со сроком отдельно.')
     } catch {
+      await workerRef.current?.terminate().catch(() => {})
+      workerRef.current = null
       if (alive.current) setError('Не удалось прочитать фото. Проверь интернет для загрузки OCR и попробуй JPG или PNG.')
     } finally {
-      if (workerRef.current) await workerRef.current.terminate().catch(() => {})
-      workerRef.current = null
       if (alive.current) { setBusy(false); onBusyChange(false); setProgress('') }
     }
   }
