@@ -14,3 +14,7 @@ test('keeps Cyrillic package names as editable suggestions', () => {
 test('suggests a food name without ingredient and best-before labels', () => {
   assert.deepEqual(packageNameCandidates('Pomidorų padažas\nIngredients: tomatoes\nBest before 12.2027'), ['Pomidorų padažas'])
 })
+
+test('does not mistake broken OCR fragments for a medicine name', () => {
+  assert.deepEqual(packageNameCandidates('ET Ss as EA\nBar, j\nec ©. ep Ë a b en e\nkolos skanio/ar kolas garšu'), [])
+})

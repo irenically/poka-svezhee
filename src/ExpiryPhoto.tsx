@@ -61,7 +61,7 @@ export function ExpiryPhoto({ onDate, onBusyChange, onName, onPhotoIntent, curre
       if (names.length && !currentName.trim()) { setSelectedName(names[0]); onName(names[0]) }
       const suggested = suggestedDate(dates)
       if (suggested) { setSelected(suggested); onDate(suggested) }
-      if (!dates.length && !names.length) setError('Не удалось распознать название или дату. Попробуй снять упаковку ближе при хорошем свете или введи вручную.')
+      if (!dates.length && !names.length) setError('Не удалось уверенно прочитать название и дату. Сними надпись ближе при хорошем свете или введи вручную.')
       else if (!dates.length) setError('Название найдено, а дата нет. Можно снять сторону упаковки со сроком отдельно.')
     } catch {
       await workerRef.current?.terminate().catch(() => {})
@@ -81,7 +81,7 @@ export function ExpiryPhoto({ onDate, onBusyChange, onName, onPhotoIntent, curre
     </Stack>
     {busy && <Typography variant="caption" role="status">{progress}</Typography>}
     {error && <Alert severity="warning" sx={{ mt: 1 }}>{error}</Alert>}
-    {nameCandidates.length > 0 && <Box mt={1.5}><Typography variant="body2" mb={1}>Похоже на название — выбери подходящее или поправь поле выше:</Typography><ToggleButtonGroup exclusive value={selectedName} onChange={(_event, value: string | null) => { if (value) { setSelectedName(value); onName(value) } }} size="small" sx={{ flexWrap: 'wrap' }}>{nameCandidates.map(candidate => <ToggleButton key={candidate} value={candidate}>{candidate}</ToggleButton>)}</ToggleButtonGroup></Box>}
+    {nameCandidates.length > 0 && <Box mt={1.5}><Typography variant="body2" mb={1}>Похоже на название — выбери подходящее или поправь поле ниже:</Typography><ToggleButtonGroup exclusive value={selectedName} onChange={(_event, value: string | null) => { if (value) { setSelectedName(value); onName(value) } }} size="small" sx={{ flexWrap: 'wrap' }}>{nameCandidates.map(candidate => <ToggleButton key={candidate} value={candidate}>{candidate}</ToggleButton>)}</ToggleButtonGroup></Box>}
     {candidates.length > 0 && <Box mt={1.5}><Typography variant="body2" mb={1}>{selected ? 'Нашли дату. Проверь её перед сохранением.' : 'Нашли несколько дат. Выбери срок годности:'}</Typography><ToggleButtonGroup exclusive value={selected} onChange={(_event, value: string | null) => { if (value) { setSelected(value); onDate(value) } }} size="small" sx={{ flexWrap: 'wrap' }}>{candidates.map(candidate => <ToggleButton key={candidate.date} value={candidate.date}>{candidate.label}</ToggleButton>)}</ToggleButtonGroup></Box>}
     {recognized && <details><summary>Показать распознанный текст</summary><pre>{recognized}</pre></details>}
   </Box>

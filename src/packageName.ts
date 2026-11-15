@@ -6,7 +6,10 @@ export function packageNameCandidates(text: string): string[] {
     .map(line => line.replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N})]+$/gu, '').trim())
     .filter(line => {
       const letters = line.match(/\p{L}/gu)?.length ?? 0
-      return letters >= 4 && line.length <= 90 && !nonName.test(line) && !/\b\d{2}[./-]\d{2}[./-]\d{2,4}\b/.test(line)
+      const words = line.match(/\p{L}+/gu) ?? []
+      const tinyWords = words.filter(word => word.length <= 2).length
+      const looksFragmented = tinyWords >= 3 || /[©®Ë]|[\/;,]/u.test(line)
+      return letters >= 4 && line.length <= 90 && !looksFragmented && !nonName.test(line) && !/\b\d{2}[./-]\d{2}[./-]\d{2,4}\b/.test(line)
     })
   return [...new Map(lines.map(line => [line.toLocaleLowerCase(), line])).values()].slice(0, 4)
 }
