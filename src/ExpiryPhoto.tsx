@@ -3,7 +3,7 @@ import { Alert, Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography 
 import { extractDateCandidates, suggestedDate, type DateCandidate } from './expiryDate'
 import { packageNameCandidates } from './packageName'
 
-export function ExpiryPhoto({ onDate, onBusyChange, onName, currentName, medicineMode = false }: { onDate: (date: string) => void; onBusyChange: (busy: boolean) => void; onName: (name: string) => void; currentName: string; medicineMode?: boolean }) {
+export function ExpiryPhoto({ onDate, onBusyChange, onName, onPhotoIntent, currentName, medicineMode = false }: { onDate: (date: string) => void; onBusyChange: (busy: boolean) => void; onName: (name: string) => void; onPhotoIntent: () => void; currentName: string; medicineMode?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
@@ -55,11 +55,11 @@ export function ExpiryPhoto({ onDate, onBusyChange, onName, currentName, medicin
   }
 
   return <Box className="photo-expiry">
-    <Typography variant="body2" fontWeight={700}>Название и срок по фото</Typography>
-    <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>Сфотографируй упаковку — предложим название и дату. Если они на разных сторонах, можно снять второе фото. Проверь результат перед сохранением. Фото обрабатывается в браузере.</Typography>
+    <Typography variant="body2" fontWeight={700}>Фото упаковки</Typography>
+    <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>Подскажем название и срок. Если они на разных сторонах, сними второе фото. Проверь результат перед сохранением. Фото обрабатывается в браузере.</Typography>
     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-      <Button variant="outlined" component="label" disabled={busy}>Сфотографировать<input hidden type="file" accept="image/*" capture="environment" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></Button>
-      <Button variant="outlined" component="label" disabled={busy}>Выбрать фото<input hidden type="file" accept="image/*" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></Button>
+      <Button variant="outlined" component="label" disabled={busy} onClick={onPhotoIntent}>Сфотографировать<input hidden type="file" accept="image/*" capture="environment" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></Button>
+      <Button variant="outlined" component="label" disabled={busy} onClick={onPhotoIntent}>Выбрать фото<input hidden type="file" accept="image/*" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></Button>
     </Stack>
     {busy && <Typography variant="caption" role="status">{progress}</Typography>}
     {error && <Alert severity="warning" sx={{ mt: 1 }}>{error}</Alert>}
