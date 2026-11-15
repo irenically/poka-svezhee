@@ -120,8 +120,6 @@ export function App() {
     const timer = window.setInterval(onFocus, 30000)
     return () => { window.removeEventListener('focus', onFocus); window.clearInterval(timer) }
   }, [userId])
-  useEffect(() => { if (authReady && !userId) localStorage.setItem(KEY, JSON.stringify(items)) }, [items, authReady, userId])
-  useEffect(() => { if (authReady && !userId) localStorage.setItem(knownKey, JSON.stringify(known)) }, [known, authReady, userId])
   useEffect(() => () => scannerRef.current?.stop(), [])
 
   const visible = useMemo(() => items.filter(item => (place === 'all' || item.place === place) && item.name.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru'))).sort((a, b) => urgency(a) - urgency(b) || a.name.localeCompare(b.name, 'ru')), [items, place, query])
@@ -206,11 +204,16 @@ export function App() {
     if (error) { setCloudError(error.message); return }
   }
 
+  if (!authReady || !userId) return <div className="app-shell">
+    <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div></header>
+    <main><section className="auth-gate"><div className="auth-gate-icon" aria-hidden="true">✳</div><h1>Общий холодильник<br/><em>под присмотром</em></h1><p>{pendingInvite ? 'Тебя пригласили в общий список. Войди или создай аккаунт, чтобы присоединиться.' : 'Войди или создай аккаунт, чтобы вести запасы и делиться ими с семьёй.'}</p>{authReady ? <button className="add-button" onClick={() => setAuthOpen(true)}>{pendingInvite ? 'Войти и принять приглашение' : 'Войти или зарегистрироваться'}</button> : <span role="status">Проверяем вход…</span>}</section></main>
+    {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} />}
+  </div>
+
   return <div className="app-shell">
-    <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div><div className="header-note">{userId ? <><span>{userEmail}</span><button onClick={signOut}>Выйти</button></> : <button onClick={() => setAuthOpen(true)}>Войти и синхронизировать</button>}</div></header>
+    <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div><div className="header-note"><span>{userEmail}</span><button onClick={signOut}>Выйти</button></div></header>
     <main>
       {cloudError && <div className="sync-alert" role="alert">Ошибка синхронизации: {cloudError} <button onClick={() => window.location.reload()}>Повторить</button></div>}
-      {!userId && <div className="sync-notice">{pendingInvite ? 'Тебя пригласили в общий холодильник. Войди или создай аккаунт, чтобы присоединиться.' : 'Сейчас запасы хранятся только в этом браузере.'} <button onClick={() => setAuthOpen(true)}>{pendingInvite ? 'Войти и принять приглашение' : 'Войти для синхронизации'}</button></div>}
       {syncing && <div className="sync-notice" role="status">Загружаем запасы из облака…</div>}
       {userId && cloudLoaded && <FamilyPanel household={household} userId={userId} pendingInvite={pendingInvite} onJoined={() => { clearPendingInvite(); setPendingInvite('') }} onChanged={refreshFamily} />}
       <section className="overview"><div><h1>Что у нас<br/><em>в запасе?</em></h1><p>{items.length === 0 ? 'Добавь первый продукт — и мы поможем вспомнить о нём вовремя.' : urgentCount ? `${urgentCount} ${urgentCount === 1 ? 'продукт ждёт' : 'продукта ждут'} внимания в ближайшие дни.` : 'Всё спокойно. Продукты под присмотром.'}</p></div><div className="overview-illustration" aria-hidden="true"><div className="shelf shelf-one"><i></i><i></i><i></i></div><div className="shelf shelf-two"><i></i><i></i></div><div className="shelf shelf-three"><i></i><i></i><i></i></div></div></section>
