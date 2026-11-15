@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Alert, Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, TextField, Typography } from '@mui/material'
+import { X } from 'lucide-react'
 import { supabase } from './supabase'
 
 export function AuthPanel({ onClose }: { onClose: () => void }) {
@@ -19,10 +21,21 @@ export function AuthPanel({ onClose }: { onClose: () => void }) {
       if (result.error) throw result.error
       if (result.data.session) onClose()
       else setMessage('Проверь почту и подтверди адрес, затем вернись сюда и войди.')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Не удалось войти. Попробуй ещё раз.')
-    } finally { setBusy(false) }
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Не удалось войти. Попробуй ещё раз.') }
+    finally { setBusy(false) }
   }
 
-  return <div className="dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}><section className="dialog auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="dialog-top"><div><h2 id="auth-title">{mode === 'signin' ? 'Войти в запасы' : 'Создать аккаунт'}</h2><p>Один список на всех твоих устройствах.</p></div><button className="close-button" onClick={onClose} aria-label="Закрыть">×</button></div><form onSubmit={submit}><label className="field"><span>Почта</span><input type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></label><label className="field"><span>Пароль</span><input type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} minLength={6} required value={password} onChange={event => setPassword(event.target.value)} placeholder="Не меньше 6 символов" /></label>{message && <p className="field-message" role="status">{message}</p>}<button className="save-button" disabled={busy} type="submit">{busy ? 'Подожди…' : mode === 'signin' ? 'Войти' : 'Создать аккаунт'}</button></form><button className="auth-switch" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage('') }}>{mode === 'signin' ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти'}</button></section></div>
+  return <Dialog open onClose={onClose} fullWidth maxWidth="xs" aria-labelledby="auth-title">
+    <DialogTitle id="auth-title" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+      <Box><Typography variant="h6" fontWeight={800}>{mode === 'signin' ? 'Войти в запасы' : 'Создать аккаунт'}</Typography><Typography variant="body2" color="text.secondary">Один список на всех твоих устройствах.</Typography></Box>
+      <IconButton onClick={onClose} aria-label="Закрыть"><X size={20} /></IconButton>
+    </DialogTitle>
+    <DialogContent><Stack component="form" onSubmit={submit} spacing={2} pt={1}>
+      <TextField label="Почта" type="email" autoComplete="email" required fullWidth value={email} onChange={event => setEmail(event.target.value)} />
+      <TextField label="Пароль" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} inputProps={{ minLength: 6 }} required fullWidth value={password} onChange={event => setPassword(event.target.value)} />
+      {message && <Alert severity={message.startsWith('Проверь') ? 'info' : 'error'} role="status">{message}</Alert>}
+      <Button variant="contained" disabled={busy} type="submit">{busy ? 'Подожди…' : mode === 'signin' ? 'Войти' : 'Создать аккаунт'}</Button>
+      <Button variant="text" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage('') }}>{mode === 'signin' ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти'}</Button>
+    </Stack></DialogContent>
+  </Dialog>
 }

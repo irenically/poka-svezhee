@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Alert, Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
 import { extractDateCandidates, suggestedDate, type DateCandidate } from './expiryDate'
 
 export function ExpiryPhoto({ onDate, onBusyChange }: { onDate: (date: string) => void; onBusyChange: (busy: boolean) => void }) {
@@ -47,16 +48,16 @@ export function ExpiryPhoto({ onDate, onBusyChange }: { onDate: (date: string) =
     }
   }
 
-  return <div className="photo-expiry">
-    <div className="field-title">Срок годности по фото</div>
-    <p>Сфотографируй дату на упаковке — подставим её в поле выше. Фото обрабатывается в браузере.</p>
-    <div className="photo-actions">
-      <label className={busy ? 'disabled' : ''}>Сфотографировать<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></label>
-      <label className={busy ? 'disabled' : ''}>Выбрать фото<input type="file" accept="image/*" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></label>
-    </div>
-    {busy && <p role="status" className="field-message">{progress}</p>}
-    {error && <p role="alert" className="field-message error">{error}</p>}
-    {candidates.length > 0 && <div className="photo-results"><p>{selected ? 'Нашли дату. Проверь её перед сохранением.' : 'Нашли несколько дат. Выбери срок годности:'}</p><div className="photo-options">{candidates.map(candidate => <button key={candidate.date} type="button" className={selected === candidate.date ? 'selected' : ''} onClick={() => { setSelected(candidate.date); onDate(candidate.date) }}>{candidate.label}</button>)}</div></div>}
+  return <Box className="photo-expiry">
+    <Typography variant="body2" fontWeight={700}>Срок годности по фото</Typography>
+    <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>Сфотографируй дату на упаковке — подставим её в поле выше. Фото обрабатывается в браузере.</Typography>
+    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <Button variant="outlined" component="label" disabled={busy}>Сфотографировать<input hidden type="file" accept="image/*" capture="environment" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></Button>
+      <Button variant="outlined" component="label" disabled={busy}>Выбрать фото<input hidden type="file" accept="image/*" disabled={busy} onChange={event => { void readPhoto(event.target.files?.[0]); event.target.value = '' }} /></Button>
+    </Stack>
+    {busy && <Typography variant="caption" role="status">{progress}</Typography>}
+    {error && <Alert severity="warning" sx={{ mt: 1 }}>{error}</Alert>}
+    {candidates.length > 0 && <Box mt={1.5}><Typography variant="body2" mb={1}>{selected ? 'Нашли дату. Проверь её перед сохранением.' : 'Нашли несколько дат. Выбери срок годности:'}</Typography><ToggleButtonGroup exclusive value={selected} onChange={(_event, value: string | null) => { if (value) { setSelected(value); onDate(value) } }} size="small" sx={{ flexWrap: 'wrap' }}>{candidates.map(candidate => <ToggleButton key={candidate.date} value={candidate.date}>{candidate.label}</ToggleButton>)}</ToggleButtonGroup></Box>}
     {recognized && <details><summary>Показать распознанный текст</summary><pre>{recognized}</pre></details>}
-  </div>
+  </Box>
 }

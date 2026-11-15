@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material'
 import { createHousehold, createInvite, joinHousehold, type Household } from './family'
 import { inviteUrl } from './inviteLink'
 
@@ -16,17 +17,18 @@ export function FamilyPanel({ household, userId, pendingInvite, onJoined, onChan
     finally { setBusy(false) }
   }
 
-  return <section className="family-panel" aria-label="Семейный доступ">
-    <div><h2>Общий холодильник</h2><p>{household ? `Список «${household.name}» доступен участникам семьи.` : 'Создай семейный список или присоединись по коду приглашения.'}</p></div>
-    {!household ? <div className="family-actions">
-      {!pendingInvite && <button disabled={busy} onClick={() => run(createHousehold)}>Создать семейный список</button>}
-      <label><span>{pendingInvite ? 'Приглашение по ссылке' : 'Код приглашения'}</span><input value={code} onChange={event => setCode(event.target.value)} placeholder="Вставь код от близкого" /></label>
-      <button disabled={busy || !code.trim()} onClick={() => run(async () => { await joinHousehold(code); onJoined() })}>Присоединиться</button>
-    </div> : household.ownerId === userId ? <div className="family-actions">
-      <button disabled={busy} onClick={() => run(async () => { setInvite(await createInvite()) })}>Создать приглашение</button>
-      {invite && <div className="invite-code"><p>Отправь ссылку близкому. Она действует 7 дней; присоединиться по ней можно один раз.</p><code>{inviteUrl(invite)}</code><button onClick={() => navigator.clipboard.writeText(inviteUrl(invite)).then(() => setMessage('Ссылка скопирована.')).catch(() => setMessage('Выдели и скопируй ссылку вручную.'))}>Скопировать ссылку</button></div>}
-    </div> : null}
-    {household && pendingInvite && <p className="field-message">Ты уже состоишь в семейном списке. Присоединиться к другому пока нельзя.</p>}
-    {message && <p className="field-message" role="status">{message}</p>}
-  </section>
+  return <Paper component="section" variant="outlined" aria-label="Семейный доступ" sx={{ p: 2.5, mb: 3, bgcolor: '#f7f8f1' }}>
+    <Typography variant="h6" fontWeight={800}>Общий холодильник</Typography>
+    <Typography variant="body2" color="text.secondary" mb={2}>{household ? `Список «${household.name}» доступен участникам семьи.` : 'Создай семейный список или присоединись по коду приглашения.'}</Typography>
+    {!household ? <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+      {!pendingInvite && <Button variant="outlined" disabled={busy} onClick={() => run(createHousehold)}>Создать семейный список</Button>}
+      <TextField size="small" label={pendingInvite ? 'Приглашение по ссылке' : 'Код приглашения'} value={code} onChange={event => setCode(event.target.value)} sx={{ flex: 1 }} />
+      <Button variant="contained" disabled={busy || !code.trim()} onClick={() => run(async () => { await joinHousehold(code); onJoined() })}>Присоединиться</Button>
+    </Stack> : household.ownerId === userId ? <Stack spacing={1.5} alignItems="flex-start">
+      <Button variant="outlined" disabled={busy} onClick={() => run(async () => { setInvite(await createInvite()) })}>Создать приглашение</Button>
+      {invite && <Box sx={{ maxWidth: '100%', overflowWrap: 'anywhere' }}><Typography variant="body2" mb={1}>Отправь ссылку близкому. Она действует 7 дней и используется один раз.</Typography><Typography component="code" variant="body2" display="block" mb={1}>{inviteUrl(invite)}</Typography><Button variant="text" onClick={() => navigator.clipboard.writeText(inviteUrl(invite)).then(() => setMessage('Ссылка скопирована.')).catch(() => setMessage('Выдели и скопируй ссылку вручную.'))}>Скопировать ссылку</Button></Box>}
+    </Stack> : null}
+    {household && pendingInvite && <Alert severity="info" sx={{ mt: 2 }}>Ты уже состоишь в семейном списке. Присоединиться к другому пока нельзя.</Alert>}
+    {message && <Alert severity={message.includes('скопирована') ? 'success' : 'info'} sx={{ mt: 2 }} role="status">{message}</Alert>}
+  </Paper>
 }
