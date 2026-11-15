@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { IScannerControls } from '@zxing/browser'
 import { AuthPanel } from './AuthPanel'
 import { FamilyPanel } from './FamilyPanel'
+import { ExpiryPhoto } from './ExpiryPhoto'
 import { loadHousehold, type Household } from './family'
 import { clearPendingInvite, readPendingInvite } from './inviteLink'
 import { deleteCloudItem, loadCloudInventory, saveCloudItem, type DateKind, type Item, type Place } from './inventory'
@@ -57,6 +58,7 @@ export function App() {
   const [authOpen, setAuthOpen] = useState(false)
   const [pendingInvite, setPendingInvite] = useState('')
   const [saving, setSaving] = useState(false)
+  const [ocrBusy, setOcrBusy] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const scannerRef = useRef<IScannerControls | null>(null)
   const lastUserIdRef = useRef<string | null>(null)
@@ -126,15 +128,15 @@ export function App() {
   const urgentCount = items.filter(item => urgency(item) <= 2).length
 
   function openNew() {
-    setEditing('new'); setName(''); setBarcode(''); setQuantity('1 шт.'); setItemPlace(place === 'freezer' ? 'freezer' : 'fridge'); setDate(''); setDateKind('label'); setLookup('idle'); setScanError('')
+    setEditing('new'); setName(''); setBarcode(''); setQuantity('1 шт.'); setItemPlace(place === 'freezer' ? 'freezer' : 'fridge'); setDate(''); setDateKind('label'); setLookup('idle'); setScanError(''); setOcrBusy(false)
   }
   function openEdit(item: Item) {
-    setEditing(item); setName(item.name); setBarcode(item.barcode || ''); setQuantity(item.quantity); setItemPlace(item.place); setDate(item.date); setDateKind(item.dateKind); setLookup('idle'); setScanError('')
+    setEditing(item); setName(item.name); setBarcode(item.barcode || ''); setQuantity(item.quantity); setItemPlace(item.place); setDate(item.date); setDateKind(item.dateKind); setLookup('idle'); setScanError(''); setOcrBusy(false)
   }
   function stopScan() {
     scannerRef.current?.stop(); scannerRef.current = null; setScanning(false)
   }
-  function close() { stopScan(); setEditing(null) }
+  function close() { stopScan(); setEditing(null); setOcrBusy(false) }
 
   async function findBarcode(code = barcode) {
     const normalized = code.trim().replace(/\s/g, '')
@@ -225,7 +227,7 @@ export function App() {
     {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} />}
     {editing && <div className="dialog-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close() }}><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-top"><div><h2 id="dialog-title">{editing === 'new' ? 'Добавить продукт' : 'Изменить продукт'}</h2><p>Пара деталей — и он под присмотром.</p></div><button className="close-button" onClick={close} aria-label="Закрыть">×</button></div><form onSubmit={save}>
       <div className="barcode-block"><div className="field-title">Штрихкод</div><div className="barcode-row"><input inputMode="numeric" value={barcode} onChange={e => { setBarcode(e.target.value); setLookup('idle') }} placeholder="Цифры под штрихкодом" aria-label="Штрихкод" /><button type="button" onClick={() => findBarcode()} disabled={lookup === 'loading'}>{lookup === 'loading' ? 'Ищем…' : 'Найти'}</button></div><button className="scan-button" type="button" onClick={scanning ? stopScan : startScan}>{scanning ? 'Остановить камеру' : 'Сканировать камерой'}</button>{scanning && <video ref={videoRef} className="camera" muted playsInline aria-label="Изображение с камеры" />}{lookup === 'found' && <p className="field-message success">Нашли товар. Проверь название и количество.</p>}{lookup === 'missing' && <p className="field-message">Такого кода пока нет в базе. Впиши название — запомним его.</p>}{scanError && <p className="field-message error">{scanError}</p>}</div>
-      <label className="field"><span>Название *</span><input required value={name} onChange={e => setName(e.target.value)} placeholder="Например, огурцы или молоко" autoFocus /></label><label className="field produce-field"><span>Свежие овощи — подсказать дату проверки</span><select value="" onChange={e => { const choice = produce.find(entry => entry.id === e.target.value); if (choice) { setName(choice.name); setItemPlace('fridge'); setDate(reviewDate(choice.days)); setDateKind('estimate') } }}><option value="">Выбрать овощ</option>{produce.map(entry => <option key={entry.id} value={entry.id}>{entry.name} · {entry.range} в холодильнике</option>)}</select></label><div className="field-row"><label className="field"><span>Количество</span><input value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="1 шт., 500 г…" /></label><label className="field"><span>Где хранится</span><select value={itemPlace} onChange={e => { const next = e.target.value as Place; if (dateKind === 'estimate' && itemPlace !== next) setDate(''); setItemPlace(next) }}><option value="fridge">Холодильник</option><option value="freezer">Морозилка</option></select></label></div><div className="field-row"><label className="field"><span>Дата</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label className="field"><span>Что означает дата</span><select value={dateKind} onChange={e => setDateKind(e.target.value as DateKind)}><option value="label">Срок с упаковки</option><option value="estimate">Проверить свежесть</option></select></label></div><p className="date-hint">Для свежих овощей это ориентир от сегодняшнего дня. Если куплено раньше, поправь дату. <a href="https://catalog.data.gov/dataset/fsis-foodkeeper-data" target="_blank" rel="noreferrer">Источник: USDA FoodKeeper</a>.</p><button className="save-button" type="submit" disabled={saving}>{saving ? 'Сохраняем…' : 'Сохранить продукт'}</button>
+      <label className="field"><span>Название *</span><input required value={name} onChange={e => setName(e.target.value)} placeholder="Например, огурцы или молоко" autoFocus /></label><label className="field produce-field"><span>Свежие овощи — подсказать дату проверки</span><select value="" onChange={e => { const choice = produce.find(entry => entry.id === e.target.value); if (choice) { setName(choice.name); setItemPlace('fridge'); setDate(reviewDate(choice.days)); setDateKind('estimate') } }}><option value="">Выбрать овощ</option>{produce.map(entry => <option key={entry.id} value={entry.id}>{entry.name} · {entry.range} в холодильнике</option>)}</select></label><div className="field-row"><label className="field"><span>Количество</span><input value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="1 шт., 500 г…" /></label><label className="field"><span>Где хранится</span><select value={itemPlace} onChange={e => { const next = e.target.value as Place; if (dateKind === 'estimate' && itemPlace !== next) setDate(''); setItemPlace(next) }}><option value="fridge">Холодильник</option><option value="freezer">Морозилка</option></select></label></div><div className="field-row"><label className="field"><span>Дата</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label className="field"><span>Что означает дата</span><select value={dateKind} onChange={e => setDateKind(e.target.value as DateKind)}><option value="label">Срок с упаковки</option><option value="estimate">Проверить свежесть</option></select></label></div><ExpiryPhoto onDate={value => { setDate(value); setDateKind('label') }} onBusyChange={setOcrBusy} /><p className="date-hint">Для свежих овощей это ориентир от сегодняшнего дня. Если куплено раньше, поправь дату. <a href="https://catalog.data.gov/dataset/fsis-foodkeeper-data" target="_blank" rel="noreferrer">Источник: USDA FoodKeeper</a>.</p><button className="save-button" type="submit" disabled={saving || ocrBusy}>{saving ? 'Сохраняем…' : ocrBusy ? 'Читаем фото…' : 'Сохранить продукт'}</button>
     </form></section></div>}
   </div>
 }
