@@ -1,7 +1,7 @@
 // OCR on packaging is fallible: offer likely printed lines as editable suggestions.
-const nonName = /\b(?:exp(?:iry)?|lot|batch|sn|serial|gtin|ean|mfg|manufactur(?:ed|er)|tablet(?:s)?|capsule(?:s)?)\b|tablečių|kapsul|таблетк|капсул|годен|срок|серия|партия|laikymo|tinkamumo|vaistinis preparatas/i
+const nonName = /\b(?:exp(?:iry)?|best before|use by|lot|batch|sn|serial|gtin|ean|mfg|manufactur(?:ed|er)|ingredients|nutrition|tablet(?:s)?|capsule(?:s)?)\b|tablečių|kapsul|таблетк|капсул|годен|срок|серия|партия|состав|пищевая ценность|laikymo|tinkamumo|geriausias iki|sudėtis|vaistinis preparatas/i
 
-export function medicineNameCandidates(text: string): string[] {
+export function packageNameCandidates(text: string): string[] {
   const lines = text.split(/\r?\n/)
     .map(line => line.replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N})]+$/gu, '').trim())
     .filter(line => {
