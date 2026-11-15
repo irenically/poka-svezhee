@@ -10,6 +10,7 @@ export const categories = [
   { id: 'pantry', label: 'Бакалея' },
   { id: 'drinks', label: 'Напитки' },
   { id: 'ready', label: 'Готовая еда' },
+  { id: 'medicine', label: 'Лекарства' },
   { id: 'other', label: 'Другое' },
 ] as const
 

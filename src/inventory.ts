@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import type { Category } from './category'
 
-export type Place = 'fridge' | 'freezer'
+export type Place = 'fridge' | 'freezer' | 'medicine'
 export type DateKind = 'label' | 'estimate'
 export type Item = { id: string; name: string; barcode?: string; quantity: string; category: Category; place: Place; date: string; dateKind: DateKind; addedAt: string }
 
