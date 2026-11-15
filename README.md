@@ -29,6 +29,7 @@ npm run dev
 - Схема базы: `supabase/migrations/20261115150000_initial_inventory.sql`.
 - Семейный доступ: `supabase/migrations/20261115170000_family_inventory.sql`.
 - Категории: `supabase/migrations/20261115190000_inventory_categories.sql`.
+- Соусы и консервация: `supabase/migrations/20261115193000_more_inventory_categories.sql`.
 - Публикация на GitHub Pages: `.github/workflows/deploy.yml`.
 - Ключ Supabase в клиентском коде является publishable key; доступ к строкам ограничен RLS.
 - Значения для овощей сверены с данными FoodKeeper FSIS (CC0) по идентификаторам записей, указанным в `src/produce.ts`. Официальный сервер блокировал автоматическое скачивание, поэтому для сверки использована [публичная копия данных](https://github.com/haggman/A4I2026-challenge-2-food-equity/blob/main/data/foodkeeper.json). Официальный [каталог USDA](https://catalog.data.gov/dataset/fsis-foodkeeper-data) остаётся исходным источником.

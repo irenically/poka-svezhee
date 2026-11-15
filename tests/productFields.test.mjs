@@ -21,5 +21,7 @@ test('suggests fresh produce from its name only', () => {
 test('maps barcode taxonomy to a useful category', () => {
   assert.equal(categoryFromBarcode(['en:dairies', 'en:yogurts']), 'dairy')
   assert.equal(categoryFromBarcode(['en:vegetables', 'en:tomatoes']), 'vegetables')
+  assert.equal(categoryFromBarcode(['en:tomato-sauces', 'en:tomatoes']), 'sauces')
+  assert.equal(categoryFromBarcode(['en:canned-vegetables', 'en:vegetables']), 'preserves')
   assert.equal(categoryFromBarcode(['en:unclassified-foods']), null)
 })
