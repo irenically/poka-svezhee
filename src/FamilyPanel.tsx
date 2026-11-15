@@ -3,7 +3,7 @@ import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/ma
 import { createHousehold, createInvite, joinHousehold, type Household } from './family'
 import { inviteUrl } from './inviteLink'
 
-export function FamilyPanel({ household, userId, pendingInvite, onJoined, onChanged }: { household: Household | null; userId: string; pendingInvite: string; onJoined: () => void; onChanged: () => Promise<void> }) {
+export function FamilyPanel({ household, userId, pendingInvite, onJoined, onChanged, embedded = false }: { household: Household | null; userId: string; pendingInvite: string; onJoined: () => void; onChanged: () => Promise<void>; embedded?: boolean }) {
   const [code, setCode] = useState(pendingInvite)
   const [invite, setInvite] = useState('')
   const [busy, setBusy] = useState(false)
@@ -17,7 +17,7 @@ export function FamilyPanel({ household, userId, pendingInvite, onJoined, onChan
     finally { setBusy(false) }
   }
 
-  return <Paper component="section" variant="outlined" aria-label="Семейный доступ" sx={{ p: 2.5, mb: 3, bgcolor: '#f7f8f1' }}>
+  return <Paper component="section" variant={embedded ? undefined : 'outlined'} elevation={0} aria-label="Семейный доступ" sx={{ p: embedded ? 0 : 2.5, mb: embedded ? 0 : 3, bgcolor: 'transparent' }}>
     <Typography variant="h6" fontWeight={800}>Общий холодильник</Typography>
     <Typography variant="body2" color="text.secondary" mb={2}>{household ? `Вы и приглашённые участники видите одни и те же запасы. Название семьи: «${household.name}».` : 'Создай общий доступ к запасам или присоединись по приглашению.'}</Typography>
     {!household ? <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>

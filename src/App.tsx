@@ -5,8 +5,8 @@ import { FamilyPanel } from './FamilyPanel'
 import { ExpiryPhoto } from './ExpiryPhoto'
 import { QuantityControl } from './QuantityControl'
 import { DateField } from './DateField'
-import { Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, List, ListItem, MenuItem, Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
-import { Barcode, BriefcaseMedical, Camera, LayoutGrid, Pencil, Pill, Refrigerator, Snowflake, Trash2, Utensils, X } from 'lucide-react'
+import { Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, Divider, IconButton, List, ListItem, MenuItem, Paper, Popover, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
+import { Barcode, BriefcaseMedical, Camera, LayoutGrid, Pencil, Pill, Refrigerator, Snowflake, Trash2, UserRound, Utensils, X } from 'lucide-react'
 import { categories, categoryFromBarcode, categoryLabel, type Category } from './category'
 import { isValidISODate } from './expiryDate'
 import { loadHousehold, type Household } from './family'
@@ -67,10 +67,12 @@ export function App() {
   const [syncing, setSyncing] = useState(false)
   const [cloudError, setCloudError] = useState('')
   const [authOpen, setAuthOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [pendingInvite, setPendingInvite] = useState('')
   const [saving, setSaving] = useState(false)
   const [ocrBusy, setOcrBusy] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const profileAnchorRef = useRef<HTMLButtonElement>(null)
   const scannerRef = useRef<IScannerControls | null>(null)
   const lastUserIdRef = useRef<string | null>(null)
   const autoDateRef = useRef<string | null>(null)
@@ -119,6 +121,7 @@ export function App() {
       .finally(() => { if (active) setSyncing(false) })
     return () => { active = false }
   }, [authReady, userId])
+  useEffect(() => { if (pendingInvite && userId && cloudLoaded) setProfileOpen(true) }, [pendingInvite, userId, cloudLoaded])
   async function refreshFamily() {
     if (!userId) return
     setSyncing(true); setCloudError('')
@@ -273,11 +276,10 @@ export function App() {
   </div>
 
   return <div className="app-shell">
-    <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div><div className="header-note"><Typography variant="caption" sx={{ display: 'block' }}>{userEmail}</Typography><Button size="small" onClick={signOut}>Выйти</Button></div></header>
+    <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div><IconButton ref={profileAnchorRef} onClick={() => setProfileOpen(true)} aria-label="Аккаунт и семейный доступ" aria-expanded={profileOpen} title="Аккаунт и семейный доступ" sx={{ ml: 'auto', width: 44, height: 44, color: '#315b45', border: '1px solid #b9cabb' }}><UserRound size={22} /></IconButton></header>
     <main>
       {cloudError && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => window.location.reload()}>Повторить</Button>}>Ошибка синхронизации: {cloudError}</Alert>}
       {syncing && <Alert severity="info" sx={{ mb: 2 }} role="status">Загружаем запасы из облака…</Alert>}
-      {userId && cloudLoaded && <FamilyPanel household={household} userId={userId} pendingInvite={pendingInvite} onJoined={() => { clearPendingInvite(); setPendingInvite('') }} onChanged={refreshFamily} />}
       <Paper className="overview" elevation={0}><Box><Typography variant="h2" component="h1">Что у нас<br/><em>в запасе?</em></Typography><Typography>{items.length === 0 ? 'Добавь первый продукт — и мы поможем вспомнить о нём вовремя.' : urgentCount ? `${urgentCount} ${urgentCount === 1 ? 'продукт ждёт' : 'продукта ждут'} внимания в ближайшие дни.` : 'Всё спокойно. Продукты под присмотром.'}</Typography></Box><div className="overview-illustration" aria-hidden="true"><div className="shelf shelf-one"><i></i><i></i><i></i></div><div className="shelf shelf-two"><i></i><i></i></div><div className="shelf shelf-three"><i></i><i></i><i></i></div></div></Paper>
       <section className="inventory" aria-label="Запасы"><Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}><Box><Typography variant="h5" component="h2" fontWeight={800}>{place === 'medicine' ? 'Аптечка' : 'Мои запасы'}</Typography><Typography variant="body2" color="text.secondary">{place === 'medicine' ? items.filter(item => item.place === 'medicine').length : items.length} в запасе</Typography></Box><Button variant="contained" onClick={openNew} disabled={syncing}>＋ Добавить</Button></Stack>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ my: 3 }} alignItems={{ md: 'center' }}><ToggleButtonGroup exclusive size="small" value={place} onChange={(_event, value: Place | 'all' | null) => { if (value) { setPlace(value); setCategoryFilter('all') } }} aria-label="Место хранения" sx={{ '& .MuiToggleButton-root': { gap: 0.75, px: { xs: 1, sm: 1.5 }, fontSize: { xs: 11, sm: 13 } } }}><ToggleButton value="all"><LayoutGrid size={16} aria-hidden="true" />Все</ToggleButton><ToggleButton value="fridge"><Refrigerator size={16} aria-hidden="true" />Холодильник</ToggleButton><ToggleButton value="freezer"><Snowflake size={16} aria-hidden="true" />Морозилка</ToggleButton><ToggleButton value="medicine"><BriefcaseMedical size={16} aria-hidden="true" />Аптечка</ToggleButton></ToggleButtonGroup><TextField select size="small" label="Категория" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as Category | 'all')} sx={{ minWidth: 175 }}><MenuItem value="all">Все категории</MenuItem>{categories.filter(option => place !== 'medicine' || option.id === 'medicine').map(option => <MenuItem key={option.id} value={option.id}>{option.label}</MenuItem>)}</TextField><TextField size="small" label="Поиск по запасам" value={query} onChange={e => setQuery(e.target.value)} sx={{ ml: { md: 'auto' }, minWidth: 180 }} /></Stack>
@@ -285,6 +287,13 @@ export function App() {
       </section>
     </main>
     {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} />}
+    <Popover open={profileOpen} anchorEl={profileAnchorRef.current} onClose={() => setProfileOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }} slotProps={{ paper: { sx: { width: 360, maxWidth: 'calc(100vw - 32px)', p: 2.5, mt: 1, bgcolor: '#f7f8f1' } } }}>
+      <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{userEmail}</Typography>
+      <Divider sx={{ my: 2 }} />
+      {userId && cloudLoaded ? <FamilyPanel embedded household={household} userId={userId} pendingInvite={pendingInvite} onJoined={() => { clearPendingInvite(); setPendingInvite('') }} onChanged={refreshFamily} /> : <Typography variant="body2" color="text.secondary">Загружаем семейный доступ…</Typography>}
+      <Divider sx={{ my: 2 }} />
+      <Button onClick={() => { setProfileOpen(false); void signOut() }} size="small">Выйти</Button>
+    </Popover>
     <Dialog open={!!editing} onClose={close} fullWidth maxWidth="sm" aria-labelledby="dialog-title"><DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><Box><Typography id="dialog-title" variant="h6" fontWeight={800}>{editing === 'new' ? (itemPlace === 'medicine' ? 'Добавить в аптечку' : 'Добавить продукт') : (itemPlace === 'medicine' ? 'Изменить в аптечке' : 'Изменить продукт')}</Typography><Typography variant="body2" color="text.secondary">Пара деталей — и он под присмотром.</Typography></Box><IconButton onClick={close} aria-label="Закрыть"><X size={20} /></IconButton></DialogTitle><DialogContent><Stack component="form" onSubmit={save} spacing={2.5} pt={1}>
       <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f0f5e8' }}>
         {itemPlace !== 'medicine' && <ToggleButtonGroup exclusive size="small" value={entryMethod} aria-label="Способ заполнения" onChange={(_, method: 'barcode' | 'photo' | null) => {
