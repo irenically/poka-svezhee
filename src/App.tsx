@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { IScannerControls } from '@zxing/browser'
 import { AuthPanel } from './AuthPanel'
+import { FamilyPanel } from './FamilyPanel'
+import { loadHousehold, type Household } from './family'
 import { deleteCloudItem, loadCloudInventory, saveCloudItem, type DateKind, type Item, type Place } from './inventory'
 import { supabase } from './supabase'
 import { produce, reviewDate } from './produce'
@@ -46,7 +48,9 @@ export function App() {
   const [scanning, setScanning] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState('')
+  const [household, setHousehold] = useState<Household | null>(null)
   const [authReady, setAuthReady] = useState(false)
+  const [cloudLoaded, setCloudLoaded] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [cloudError, setCloudError] = useState('')
   const [authOpen, setAuthOpen] = useState(false)
@@ -65,6 +69,8 @@ export function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (lastUserIdRef.current && !session) {
         setItems([]); setKnown({})
+        setHousehold(null)
+        setCloudLoaded(false)
         localStorage.removeItem(KEY); localStorage.removeItem(knownKey)
       }
       lastUserIdRef.current = session?.user.id || null
@@ -77,15 +83,38 @@ export function App() {
   useEffect(() => {
     if (!authReady || !userId) return
     let active = true
+    setCloudLoaded(false)
     setSyncing(true); setCloudError('')
-    loadCloudInventory(userId, loadItems(), loadKnown()).then(result => {
+    loadHousehold(userId).then(async family => {
+      const result = await loadCloudInventory(userId, family?.id || null, loadItems(), loadKnown())
+      return { family, result }
+    }).then(({ family, result }) => {
       if (!active) return
+      setHousehold(family)
       setItems(result.items); setKnown(result.known)
+      setCloudLoaded(true)
       localStorage.removeItem(KEY); localStorage.removeItem(knownKey)
     }).catch(error => { if (active) setCloudError(error instanceof Error ? error.message : 'Не удалось загрузить запасы.') })
       .finally(() => { if (active) setSyncing(false) })
     return () => { active = false }
   }, [authReady, userId])
+  async function refreshFamily() {
+    if (!userId) return
+    setSyncing(true); setCloudError('')
+    try {
+      const family = await loadHousehold(userId)
+      const result = await loadCloudInventory(userId, family?.id || null, [], {})
+      setHousehold(family); setItems(result.items); setKnown(result.known)
+    } catch (error) { setCloudError(error instanceof Error ? error.message : 'Не удалось обновить список.') }
+    finally { setSyncing(false) }
+  }
+  useEffect(() => {
+    if (!userId) return
+    const onFocus = () => { void refreshFamily() }
+    window.addEventListener('focus', onFocus)
+    const timer = window.setInterval(onFocus, 30000)
+    return () => { window.removeEventListener('focus', onFocus); window.clearInterval(timer) }
+  }, [userId])
   useEffect(() => { if (authReady && !userId) localStorage.setItem(KEY, JSON.stringify(items)) }, [items, authReady, userId])
   useEffect(() => { if (authReady && !userId) localStorage.setItem(knownKey, JSON.stringify(known)) }, [known, authReady, userId])
   useEffect(() => () => scannerRef.current?.stop(), [])
@@ -150,7 +179,7 @@ export function App() {
     const item: Item = { id: editing && editing !== 'new' ? editing.id : crypto.randomUUID(), name: cleanName, barcode: barcode.trim() || undefined, quantity: quantity.trim() || '1 шт.', place: itemPlace, date, dateKind, addedAt: editing && editing !== 'new' ? editing.addedAt : new Date().toISOString() }
     if (userId) {
       setSaving(true); setCloudError('')
-      try { await saveCloudItem(userId, item) }
+      try { await saveCloudItem(userId, household?.id || null, item, editing !== 'new') }
       catch (error) { setCloudError(error instanceof Error ? error.message : 'Не удалось сохранить продукт.'); setSaving(false); return }
       setSaving(false)
     }
@@ -161,7 +190,7 @@ export function App() {
   async function remove(item: Item, action: 'ate' | 'discarded') {
     if (action === 'discarded' && !window.confirm(`Убрать «${item.name}» из запасов как выброшенное?`)) return
     if (userId) {
-      try { await deleteCloudItem(userId, item.id) }
+      try { await deleteCloudItem(item.id) }
       catch (error) { setCloudError(error instanceof Error ? error.message : 'Не удалось убрать продукт.'); return }
     }
     setItems(current => current.filter(old => old.id !== item.id))
@@ -178,6 +207,7 @@ export function App() {
       {cloudError && <div className="sync-alert" role="alert">Ошибка синхронизации: {cloudError} <button onClick={() => window.location.reload()}>Повторить</button></div>}
       {!userId && <div className="sync-notice">Сейчас запасы хранятся только в этом браузере. <button onClick={() => setAuthOpen(true)}>Войти для синхронизации</button></div>}
       {syncing && <div className="sync-notice" role="status">Загружаем запасы из облака…</div>}
+      {userId && cloudLoaded && <FamilyPanel household={household} userId={userId} onChanged={refreshFamily} />}
       <section className="overview"><div><h1>Что у нас<br/><em>в запасе?</em></h1><p>{items.length === 0 ? 'Добавь первый продукт — и мы поможем вспомнить о нём вовремя.' : urgentCount ? `${urgentCount} ${urgentCount === 1 ? 'продукт ждёт' : 'продукта ждут'} внимания в ближайшие дни.` : 'Всё спокойно. Продукты под присмотром.'}</p></div><div className="overview-illustration" aria-hidden="true"><div className="shelf shelf-one"><i></i><i></i><i></i></div><div className="shelf shelf-two"><i></i><i></i></div><div className="shelf shelf-three"><i></i><i></i><i></i></div></div></section>
       <section className="inventory" aria-label="Запасы"><div className="inventory-heading"><div><h2>Мои продукты</h2><p>{items.length} в запасе</p></div><button className="add-button" onClick={openNew} disabled={syncing}><span aria-hidden="true">＋</span> Добавить</button></div>
         <div className="toolbar"><div className="tabs" role="group" aria-label="Место хранения"><button className={place === 'all' ? 'active' : ''} onClick={() => setPlace('all')}>Все</button><button className={place === 'fridge' ? 'active' : ''} onClick={() => setPlace('fridge')}>Холодильник</button><button className={place === 'freezer' ? 'active' : ''} onClick={() => setPlace('freezer')}>Морозилка</button></div><label className="search"><span className="sr-only">Поиск по запасам</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Найти продукт" /></label></div>
