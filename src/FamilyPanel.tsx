@@ -19,7 +19,7 @@ export function FamilyPanel({ household, userId, pendingInvite, onJoined, onChan
 
   return <Paper component="section" variant="outlined" aria-label="Семейный доступ" sx={{ p: 2.5, mb: 3, bgcolor: '#f7f8f1' }}>
     <Typography variant="h6" fontWeight={800}>Общий холодильник</Typography>
-    <Typography variant="body2" color="text.secondary" mb={2}>{household ? `Список «${household.name}» доступен участникам семьи.` : 'Создай семейный список или присоединись по коду приглашения.'}</Typography>
+    <Typography variant="body2" color="text.secondary" mb={2}>{household ? `Вы и приглашённые участники видите одни и те же запасы. Название семьи: «${household.name}».` : 'Создай общий доступ к запасам или присоединись по приглашению.'}</Typography>
     {!household ? <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
       {!pendingInvite && <Button variant="outlined" disabled={busy} onClick={() => run(createHousehold)}>Создать семейный список</Button>}
       <TextField size="small" label={pendingInvite ? 'Приглашение по ссылке' : 'Код приглашения'} value={code} onChange={event => setCode(event.target.value)} sx={{ flex: 1 }} />
