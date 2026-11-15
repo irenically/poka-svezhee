@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { IScannerControls } from '@zxing/browser'
-
-type Place = 'fridge' | 'freezer'
-type DateKind = 'label' | 'estimate'
-type Item = { id: string; name: string; barcode?: string; quantity: string; place: Place; date: string; dateKind: DateKind; addedAt: string }
+import { AuthPanel } from './AuthPanel'
+import { deleteCloudItem, loadCloudInventory, saveCloudItem, type DateKind, type Item, type Place } from './inventory'
+import { supabase } from './supabase'
+import { produce, reviewDate } from './produce'
 
 const KEY = 'poka-svezhee-items-v1'
 const knownKey = 'poka-svezhee-barcodes-v1'
@@ -44,11 +44,50 @@ export function App() {
   const [lookup, setLookup] = useState<'idle' | 'loading' | 'found' | 'missing' | 'error'>('idle')
   const [scanError, setScanError] = useState('')
   const [scanning, setScanning] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState('')
+  const [authReady, setAuthReady] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [cloudError, setCloudError] = useState('')
+  const [authOpen, setAuthOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const scannerRef = useRef<IScannerControls | null>(null)
+  const lastUserIdRef = useRef<string | null>(null)
 
-  useEffect(() => localStorage.setItem(KEY, JSON.stringify(items)), [items])
-  useEffect(() => localStorage.setItem(knownKey, JSON.stringify(known)), [known])
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      lastUserIdRef.current = data.session?.user.id || null
+      setUserId(data.session?.user.id || null)
+      setUserEmail(data.session?.user.email || '')
+      setAuthReady(true)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (lastUserIdRef.current && !session) {
+        setItems([]); setKnown({})
+        localStorage.removeItem(KEY); localStorage.removeItem(knownKey)
+      }
+      lastUserIdRef.current = session?.user.id || null
+      setUserId(session?.user.id || null)
+      setUserEmail(session?.user.email || '')
+      setAuthReady(true)
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [])
+  useEffect(() => {
+    if (!authReady || !userId) return
+    let active = true
+    setSyncing(true); setCloudError('')
+    loadCloudInventory(userId, loadItems(), loadKnown()).then(result => {
+      if (!active) return
+      setItems(result.items); setKnown(result.known)
+      localStorage.removeItem(KEY); localStorage.removeItem(knownKey)
+    }).catch(error => { if (active) setCloudError(error instanceof Error ? error.message : 'Не удалось загрузить запасы.') })
+      .finally(() => { if (active) setSyncing(false) })
+    return () => { active = false }
+  }, [authReady, userId])
+  useEffect(() => { if (authReady && !userId) localStorage.setItem(KEY, JSON.stringify(items)) }, [items, authReady, userId])
+  useEffect(() => { if (authReady && !userId) localStorage.setItem(knownKey, JSON.stringify(known)) }, [known, authReady, userId])
   useEffect(() => () => scannerRef.current?.stop(), [])
 
   const visible = useMemo(() => items.filter(item => (place === 'all' || item.place === place) && item.name.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru'))).sort((a, b) => urgency(a) - urgency(b) || a.name.localeCompare(b.name, 'ru')), [items, place, query])
@@ -104,32 +143,51 @@ export function App() {
     } catch { setScanning(false); setScanError('Камера недоступна. Разрешите доступ или введите код вручную.') }
   }
 
-  function save(event: React.FormEvent) {
+  async function save(event: React.FormEvent) {
     event.preventDefault()
     const cleanName = name.trim()
     if (!cleanName) return
     const item: Item = { id: editing && editing !== 'new' ? editing.id : crypto.randomUUID(), name: cleanName, barcode: barcode.trim() || undefined, quantity: quantity.trim() || '1 шт.', place: itemPlace, date, dateKind, addedAt: editing && editing !== 'new' ? editing.addedAt : new Date().toISOString() }
+    if (userId) {
+      setSaving(true); setCloudError('')
+      try { await saveCloudItem(userId, item) }
+      catch (error) { setCloudError(error instanceof Error ? error.message : 'Не удалось сохранить продукт.'); setSaving(false); return }
+      setSaving(false)
+    }
     setItems(current => editing === 'new' ? [item, ...current] : current.map(old => old.id === item.id ? item : old))
     if (item.barcode) setKnown(current => ({ ...current, [item.barcode!]: cleanName }))
     close()
   }
-  function remove(item: Item, action: 'ate' | 'discarded') {
+  async function remove(item: Item, action: 'ate' | 'discarded') {
     if (action === 'discarded' && !window.confirm(`Убрать «${item.name}» из запасов как выброшенное?`)) return
+    if (userId) {
+      try { await deleteCloudItem(userId, item.id) }
+      catch (error) { setCloudError(error instanceof Error ? error.message : 'Не удалось убрать продукт.'); return }
+    }
     setItems(current => current.filter(old => old.id !== item.id))
   }
 
+  async function signOut() {
+    const { error } = await supabase.auth.signOut()
+    if (error) { setCloudError(error.message); return }
+  }
+
   return <div className="app-shell">
-    <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div><div className="header-note">Домашние запасы<br/>под рукой</div></header>
+    <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div><div className="header-note">{userId ? <><span>{userEmail}</span><button onClick={signOut}>Выйти</button></> : <button onClick={() => setAuthOpen(true)}>Войти и синхронизировать</button>}</div></header>
     <main>
+      {cloudError && <div className="sync-alert" role="alert">Ошибка синхронизации: {cloudError} <button onClick={() => window.location.reload()}>Повторить</button></div>}
+      {!userId && <div className="sync-notice">Сейчас запасы хранятся только в этом браузере. <button onClick={() => setAuthOpen(true)}>Войти для синхронизации</button></div>}
+      {syncing && <div className="sync-notice" role="status">Загружаем запасы из облака…</div>}
       <section className="overview"><div><h1>Что у нас<br/><em>в запасе?</em></h1><p>{items.length === 0 ? 'Добавь первый продукт — и мы поможем вспомнить о нём вовремя.' : urgentCount ? `${urgentCount} ${urgentCount === 1 ? 'продукт ждёт' : 'продукта ждут'} внимания в ближайшие дни.` : 'Всё спокойно. Продукты под присмотром.'}</p></div><div className="overview-illustration" aria-hidden="true"><div className="shelf shelf-one"><i></i><i></i><i></i></div><div className="shelf shelf-two"><i></i><i></i></div><div className="shelf shelf-three"><i></i><i></i><i></i></div></div></section>
-      <section className="inventory" aria-label="Запасы"><div className="inventory-heading"><div><h2>Мои продукты</h2><p>{items.length} в запасе</p></div><button className="add-button" onClick={openNew}><span aria-hidden="true">＋</span> Добавить</button></div>
+      <section className="inventory" aria-label="Запасы"><div className="inventory-heading"><div><h2>Мои продукты</h2><p>{items.length} в запасе</p></div><button className="add-button" onClick={openNew} disabled={syncing}><span aria-hidden="true">＋</span> Добавить</button></div>
         <div className="toolbar"><div className="tabs" role="group" aria-label="Место хранения"><button className={place === 'all' ? 'active' : ''} onClick={() => setPlace('all')}>Все</button><button className={place === 'fridge' ? 'active' : ''} onClick={() => setPlace('fridge')}>Холодильник</button><button className={place === 'freezer' ? 'active' : ''} onClick={() => setPlace('freezer')}>Морозилка</button></div><label className="search"><span className="sr-only">Поиск по запасам</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Найти продукт" /></label></div>
         {visible.length ? <ul className="item-list">{visible.map(item => <li className="item" key={item.id}><div className={`status-dot ${urgency(item) <= 0 ? 'late' : urgency(item) <= 2 ? 'soon' : ''}`}></div><div className="item-content"><strong>{item.name}</strong><span>{item.quantity} · {item.place === 'fridge' ? 'Холодильник' : 'Морозилка'}</span></div><div className={`item-date ${urgency(item) <= 0 ? 'late' : urgency(item) <= 2 ? 'soon' : ''}`}>{dateLabel(item)}</div><div className="item-actions"><button onClick={() => openEdit(item)} aria-label={`Изменить ${item.name}`}>Изменить</button><button onClick={() => remove(item, 'ate')} aria-label={`Отметить ${item.name} как съеденное`}>Съели</button><button className="quiet" onClick={() => remove(item, 'discarded')} aria-label={`Отметить ${item.name} как выброшенное`}>Выбросили</button></div></li>)}</ul> : <div className="empty"><div className="empty-symbol" aria-hidden="true">✳</div><h3>{items.length ? 'Ничего не нашлось' : 'Здесь пока пусто'}</h3><p>{items.length ? 'Попробуй другой запрос или раздел.' : 'Добавь продукты по названию или штрихкоду. Начнём с того, что уже лежит дома.'}</p><button onClick={openNew}>Добавить продукт</button></div>}
       </section>
     </main>
+    {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} />}
     {editing && <div className="dialog-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close() }}><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-top"><div><h2 id="dialog-title">{editing === 'new' ? 'Добавить продукт' : 'Изменить продукт'}</h2><p>Пара деталей — и он под присмотром.</p></div><button className="close-button" onClick={close} aria-label="Закрыть">×</button></div><form onSubmit={save}>
       <div className="barcode-block"><div className="field-title">Штрихкод</div><div className="barcode-row"><input inputMode="numeric" value={barcode} onChange={e => { setBarcode(e.target.value); setLookup('idle') }} placeholder="Цифры под штрихкодом" aria-label="Штрихкод" /><button type="button" onClick={() => findBarcode()} disabled={lookup === 'loading'}>{lookup === 'loading' ? 'Ищем…' : 'Найти'}</button></div><button className="scan-button" type="button" onClick={scanning ? stopScan : startScan}>{scanning ? 'Остановить камеру' : 'Сканировать камерой'}</button>{scanning && <video ref={videoRef} className="camera" muted playsInline aria-label="Изображение с камеры" />}{lookup === 'found' && <p className="field-message success">Нашли товар. Проверь название и количество.</p>}{lookup === 'missing' && <p className="field-message">Такого кода пока нет в базе. Впиши название — запомним его.</p>}{scanError && <p className="field-message error">{scanError}</p>}</div>
-      <label className="field"><span>Название *</span><input required value={name} onChange={e => setName(e.target.value)} placeholder="Например, огурцы или молоко" autoFocus /></label><div className="field-row"><label className="field"><span>Количество</span><input value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="1 шт., 500 г…" /></label><label className="field"><span>Где хранится</span><select value={itemPlace} onChange={e => setItemPlace(e.target.value as Place)}><option value="fridge">Холодильник</option><option value="freezer">Морозилка</option></select></label></div><div className="field-row"><label className="field"><span>Дата</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label className="field"><span>Что означает дата</span><select value={dateKind} onChange={e => setDateKind(e.target.value as DateKind)}><option value="label">Срок с упаковки</option><option value="estimate">Проверить свежесть</option></select></label></div><p className="date-hint">Для овощей и других продуктов без даты выбери «Проверить свежесть». Ориентировочные сроки из справочника добавим следующим шагом.</p><button className="save-button" type="submit">Сохранить продукт</button>
+      <label className="field"><span>Название *</span><input required value={name} onChange={e => setName(e.target.value)} placeholder="Например, огурцы или молоко" autoFocus /></label><label className="field produce-field"><span>Свежие овощи — подсказать дату проверки</span><select value="" onChange={e => { const choice = produce.find(entry => entry.id === e.target.value); if (choice) { setName(choice.name); setItemPlace('fridge'); setDate(reviewDate(choice.days)); setDateKind('estimate') } }}><option value="">Выбрать овощ</option>{produce.map(entry => <option key={entry.id} value={entry.id}>{entry.name} · {entry.range} в холодильнике</option>)}</select></label><div className="field-row"><label className="field"><span>Количество</span><input value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="1 шт., 500 г…" /></label><label className="field"><span>Где хранится</span><select value={itemPlace} onChange={e => { const next = e.target.value as Place; if (dateKind === 'estimate' && itemPlace !== next) setDate(''); setItemPlace(next) }}><option value="fridge">Холодильник</option><option value="freezer">Морозилка</option></select></label></div><div className="field-row"><label className="field"><span>Дата</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label className="field"><span>Что означает дата</span><select value={dateKind} onChange={e => setDateKind(e.target.value as DateKind)}><option value="label">Срок с упаковки</option><option value="estimate">Проверить свежесть</option></select></label></div><p className="date-hint">Для свежих овощей это ориентир от сегодняшнего дня. Если куплено раньше, поправь дату. <a href="https://catalog.data.gov/dataset/fsis-foodkeeper-data" target="_blank" rel="noreferrer">Источник: USDA FoodKeeper</a>.</p><button className="save-button" type="submit" disabled={saving}>{saving ? 'Сохраняем…' : 'Сохранить продукт'}</button>
     </form></section></div>}
   </div>
 }
