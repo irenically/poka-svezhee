@@ -28,3 +28,9 @@ test('rejects impossible calendar dates', () => {
   assert.equal(isValidISODate('2027-02-31'), false)
   assert.equal(isValidISODate('2026-11-15'), true)
 })
+
+test('reads medicine month-year expiry as the end of the month', () => {
+  assert.equal(suggestedDate(extractDateCandidates('EXP 02.2028', true)), '2028-02-29')
+  assert.deepEqual(extractDateCandidates('EXP 13.2028', true), [])
+  assert.deepEqual(extractDateCandidates('EXP 02.2028'), [])
+})

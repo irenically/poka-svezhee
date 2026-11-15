@@ -25,7 +25,7 @@ function contextScore(text: string, start: number) {
   return expiry > manufacture ? 4 : -4
 }
 
-export function extractDateCandidates(text: string): DateCandidate[] {
+export function extractDateCandidates(text: string, monthYearExpiry = false): DateCandidate[] {
   const found = new Map<string, DateCandidate>()
   const patterns = [
     /(?<!\d)(\d{4})\s*[.\/-]\s*(\d{1,2})\s*[.\/-]\s*(\d{1,2})(?!\d)/g,
@@ -40,6 +40,16 @@ export function extractDateCandidates(text: string): DateCandidate[] {
       const score = contextScore(text, match.index)
       const candidate = { date, label: match[0], score }
       if (!found.has(date) || found.get(date)!.score < score) found.set(date, candidate)
+    }
+  }
+  if (monthYearExpiry) {
+    for (const match of text.matchAll(/(?<![\d./-])(\d{1,2})\s*[.\/-]\s*(\d{4})(?![\d./-])/g)) {
+      const year = Number(match[2]); const month = Number(match[1])
+      if (month < 1 || month > 12) continue
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+      const date = isoDate(year, month, lastDay)
+      if (!date || found.has(date)) continue
+      found.set(date, { date, label: `${match[0]} (конец месяца)`, score: contextScore(text, match.index) })
     }
   }
   return [...found.values()].sort((a, b) => b.score - a.score || a.date.localeCompare(b.date))
