@@ -240,7 +240,7 @@ export function App() {
     event.preventDefault()
     const cleanName = name.trim()
     if (!cleanName) return
-    if (date && !isValidISODate(date)) { setDateError('Проверь дату в формате ГГГГ-ММ-ДД.'); return }
+    if (date && !isValidISODate(date)) { setDateError('Проверь дату в формате ДД.ММ.ГГГГ.'); return }
     const item: Item = { id: editing && editing !== 'new' ? editing.id : crypto.randomUUID(), name: cleanName, barcode: barcode.trim() || undefined, quantity: quantity.trim() || '1 шт.', category, place: itemPlace, date, dateKind, addedAt: editing && editing !== 'new' ? editing.addedAt : new Date().toISOString() }
     if (userId) {
       setSaving(true); setCloudError('')
