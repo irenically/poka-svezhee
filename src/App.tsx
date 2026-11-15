@@ -6,7 +6,7 @@ import { ExpiryPhoto } from './ExpiryPhoto'
 import { QuantityControl } from './QuantityControl'
 import { DateField } from './DateField'
 import { Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, List, ListItem, MenuItem, Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
-import { BriefcaseMedical, LayoutGrid, Pencil, Pill, Refrigerator, Snowflake, Trash2, Utensils, X } from 'lucide-react'
+import { Barcode, BriefcaseMedical, Camera, LayoutGrid, Pencil, Pill, Refrigerator, Snowflake, Trash2, Utensils, X } from 'lucide-react'
 import { categories, categoryFromBarcode, categoryLabel, type Category } from './category'
 import { isValidISODate } from './expiryDate'
 import { loadHousehold, type Household } from './family'
@@ -49,6 +49,7 @@ export function App() {
   const [editing, setEditing] = useState<Item | null | 'new'>(null)
   const [name, setName] = useState('')
   const [barcode, setBarcode] = useState('')
+  const [entryMethod, setEntryMethod] = useState<'barcode' | 'photo'>('barcode')
   const [quantity, setQuantity] = useState('1 шт.')
   const [category, setCategory] = useState<Category>('other')
   const [itemPlace, setItemPlace] = useState<Place>('fridge')
@@ -162,8 +163,8 @@ export function App() {
     } else if (!date && choice) applyReviewSuggestion(choice)
   }
   function changePlace(next: Place) {
-    if (next === 'medicine') { stopScan(); setBarcode(''); setLookup('idle'); setCategory('medicine'); categoryTouchedRef.current = false; setDateKind('label') }
-    else if (itemPlace === 'medicine') { setCategory('other'); categoryTouchedRef.current = false }
+    if (next === 'medicine') { stopScan(); setEntryMethod('photo'); setBarcode(''); setLookup('idle'); setCategory('medicine'); categoryTouchedRef.current = false; setDateKind('label') }
+    else if (itemPlace === 'medicine') { setEntryMethod('barcode'); setCategory('other'); categoryTouchedRef.current = false }
     if (autoDateRef.current && date === autoDateRef.current) {
       if (next === 'fridge') {
         const choice = findProduce(name)
@@ -177,9 +178,11 @@ export function App() {
   }
 
   function openNew() {
+    setEntryMethod(place === 'medicine' ? 'photo' : 'barcode')
     setEditing('new'); setName(''); setBarcode(''); setQuantity('1 шт.'); setCategory(place === 'medicine' ? 'medicine' : 'other'); categoryTouchedRef.current = false; setItemPlace(place === 'freezer' ? 'freezer' : place === 'medicine' ? 'medicine' : 'fridge'); setDate(''); setDateKind('label'); setDateError(''); autoDateRef.current = null; setLookup('idle'); setScanError(''); setOcrBusy(false); if (place !== 'medicine') void startScan()
   }
   function openEdit(item: Item) {
+    setEntryMethod(item.place === 'medicine' || !item.barcode ? 'photo' : 'barcode')
     setEditing(item); setName(item.name); setBarcode(item.barcode || ''); setQuantity(item.quantity); setCategory(item.category || 'other'); categoryTouchedRef.current = !!item.category && item.category !== 'other'; setItemPlace(item.place); setDate(item.date); setDateKind(item.dateKind); setDateError(''); autoDateRef.current = null; setLookup('idle'); setScanError(''); setOcrBusy(false)
   }
   function stopScan() {
@@ -283,8 +286,18 @@ export function App() {
     </main>
     {authOpen && <AuthPanel onClose={() => setAuthOpen(false)} />}
     <Dialog open={!!editing} onClose={close} fullWidth maxWidth="sm" aria-labelledby="dialog-title"><DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><Box><Typography id="dialog-title" variant="h6" fontWeight={800}>{editing === 'new' ? (itemPlace === 'medicine' ? 'Добавить в аптечку' : 'Добавить продукт') : (itemPlace === 'medicine' ? 'Изменить в аптечке' : 'Изменить продукт')}</Typography><Typography variant="body2" color="text.secondary">Пара деталей — и он под присмотром.</Typography></Box><IconButton onClick={close} aria-label="Закрыть"><X size={20} /></IconButton></DialogTitle><DialogContent><Stack component="form" onSubmit={save} spacing={2.5} pt={1}>
-      <ExpiryPhoto key={itemPlace === 'medicine' ? 'medicine-photo' : 'food-photo'} onDate={value => { setDate(value); setDateKind('label'); setDateError(''); autoDateRef.current = null }} onBusyChange={setOcrBusy} onName={changeName} onPhotoIntent={stopScan} currentName={name} medicineMode={itemPlace === 'medicine'} />
-      {itemPlace !== 'medicine' && <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f0f5e8' }}><Typography variant="body2" fontWeight={700} mb={1}>Штрихкод</Typography><Button size="small" onClick={scanning ? stopScan : startScan}>{scanning ? 'Остановить камеру' : 'Сканировать снова'}</Button>{scanning && <video ref={videoRef} className="camera" muted playsInline aria-label="Изображение с камеры" />}<Stack direction="row" spacing={1} mt={1}><TextField size="small" fullWidth inputProps={{ inputMode: 'numeric' }} value={barcode} onChange={e => { if (scanning) stopScan(); setBarcode(e.target.value); setLookup('idle') }} placeholder="Или введи цифры под штрихкодом" label="Штрихкод" /><Button variant="contained" type="button" onClick={() => findBarcode()} disabled={lookup === 'loading'}>{lookup === 'loading' ? 'Ищем…' : 'Найти'}</Button></Stack>{lookup === 'found' && <Alert severity="success" sx={{ mt: 1 }}>Нашли товар. Проверь название, категорию и количество.</Alert>}{lookup === 'missing' && <Alert severity="info" sx={{ mt: 1 }}>Такого кода пока нет в базе. Впиши название — запомним его.</Alert>}{scanError && <Alert severity="warning" sx={{ mt: 1 }}>{scanError}</Alert>}</Paper>}
+      <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f0f5e8' }}>
+        {itemPlace !== 'medicine' && <ToggleButtonGroup exclusive size="small" value={entryMethod} aria-label="Способ заполнения" onChange={(_, method: 'barcode' | 'photo' | null) => {
+          if (!method || method === entryMethod) return
+          if (method === 'photo') stopScan()
+          setEntryMethod(method)
+          if (method === 'barcode') void startScan()
+        }} sx={{ mb: 2, maxWidth: '100%', '& .MuiToggleButton-root': { gap: 0.75, px: { xs: 1, sm: 1.5 }, fontSize: { xs: 12, sm: 13 } } }}>
+          <ToggleButton value="barcode"><Barcode size={16} />Штрихкод</ToggleButton>
+          <ToggleButton value="photo"><Camera size={16} />Фото упаковки</ToggleButton>
+        </ToggleButtonGroup>}
+        {itemPlace === 'medicine' || entryMethod === 'photo' ? <ExpiryPhoto key={itemPlace === 'medicine' ? 'medicine-photo' : 'food-photo'} onDate={value => { setDate(value); setDateKind('label'); setDateError(''); autoDateRef.current = null }} onBusyChange={setOcrBusy} onName={changeName} onPhotoIntent={stopScan} currentName={name} medicineMode={itemPlace === 'medicine'} /> : <Box><Typography variant="body2" fontWeight={700} mb={1}>Штрихкод</Typography><Button size="small" onClick={scanning ? stopScan : startScan}>{scanning ? 'Остановить камеру' : 'Сканировать снова'}</Button>{scanning && <video ref={videoRef} className="camera" muted playsInline aria-label="Изображение с камеры" />}<Stack direction="row" spacing={1} mt={1}><TextField size="small" fullWidth inputProps={{ inputMode: 'numeric' }} value={barcode} onChange={e => { if (scanning) stopScan(); setBarcode(e.target.value); setLookup('idle') }} placeholder="Или введи цифры под штрихкодом" label="Штрихкод" /><Button variant="contained" type="button" onClick={() => findBarcode()} disabled={lookup === 'loading'}>{lookup === 'loading' ? 'Ищем…' : 'Найти'}</Button></Stack>{lookup === 'found' && <Alert severity="success" sx={{ mt: 1 }}>Нашли товар. Проверь название, категорию и количество.</Alert>}{lookup === 'missing' && <Alert severity="info" sx={{ mt: 1 }}>Такого кода пока нет в базе. Впиши название — запомним его.</Alert>}{scanError && <Alert severity="warning" sx={{ mt: 1 }}>{scanError}</Alert>}</Box>}
+      </Paper>
       <TextField required fullWidth label={itemPlace === 'medicine' ? 'Название лекарства' : 'Название'} value={name} onChange={e => changeName(e.target.value)} placeholder={itemPlace === 'medicine' ? 'Например, ибупрофен' : 'Например, помидоры или молоко'} />
       {produceSuggestion && <Alert severity="info" action={(dateKind !== 'estimate' || autoDateRef.current !== date) ? <Button size="small" onClick={() => applyReviewSuggestion(produceSuggestion)}>Подставить дату</Button> : undefined}><strong>{produceSuggestion.name}:</strong> {produceSuggestion.range}. <a href={produceSuggestion.sourceUrl || 'https://catalog.data.gov/dataset/fsis-foodkeeper-data'} target="_blank" rel="noreferrer">Источник</a></Alert>}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(230px, 1fr) minmax(0, 1fr)' }, gap: 2, alignItems: 'end' }}><QuantityControl key={editing === 'new' ? 'new' : editing?.id || 'closed'} value={quantity} onChange={setQuantity} /><Box sx={{ minWidth: 0 }}><Typography variant="body2" fontWeight={700} mb={1}>Где хранится</Typography><TextField select size="small" fullWidth value={itemPlace} SelectProps={{ inputProps: { 'aria-label': 'Где хранится' } }} onChange={e => changePlace(e.target.value as Place)}><MenuItem value="fridge">Холодильник</MenuItem><MenuItem value="freezer">Морозилка</MenuItem><MenuItem value="medicine">Аптечка</MenuItem></TextField></Box></Box>
