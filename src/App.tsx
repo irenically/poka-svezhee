@@ -3,6 +3,7 @@ import type { IScannerControls } from '@zxing/browser'
 import { AuthPanel } from './AuthPanel'
 import { FamilyPanel } from './FamilyPanel'
 import { loadHousehold, type Household } from './family'
+import { clearPendingInvite, readPendingInvite } from './inviteLink'
 import { deleteCloudItem, loadCloudInventory, saveCloudItem, type DateKind, type Item, type Place } from './inventory'
 import { supabase } from './supabase'
 import { produce, reviewDate } from './produce'
@@ -54,12 +55,16 @@ export function App() {
   const [syncing, setSyncing] = useState(false)
   const [cloudError, setCloudError] = useState('')
   const [authOpen, setAuthOpen] = useState(false)
+  const [pendingInvite, setPendingInvite] = useState('')
   const [saving, setSaving] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const scannerRef = useRef<IScannerControls | null>(null)
   const lastUserIdRef = useRef<string | null>(null)
 
   useEffect(() => {
+    const readLink = () => setPendingInvite(readPendingInvite())
+    readLink()
+    window.addEventListener('hashchange', readLink)
     supabase.auth.getSession().then(({ data }) => {
       lastUserIdRef.current = data.session?.user.id || null
       setUserId(data.session?.user.id || null)
@@ -78,7 +83,7 @@ export function App() {
       setUserEmail(session?.user.email || '')
       setAuthReady(true)
     })
-    return () => listener.subscription.unsubscribe()
+    return () => { listener.subscription.unsubscribe(); window.removeEventListener('hashchange', readLink) }
   }, [])
   useEffect(() => {
     if (!authReady || !userId) return
@@ -205,9 +210,9 @@ export function App() {
     <header className="site-header"><div className="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div className="brand">пока<br/>свежее<span>.</span></div><div className="header-note">{userId ? <><span>{userEmail}</span><button onClick={signOut}>Выйти</button></> : <button onClick={() => setAuthOpen(true)}>Войти и синхронизировать</button>}</div></header>
     <main>
       {cloudError && <div className="sync-alert" role="alert">Ошибка синхронизации: {cloudError} <button onClick={() => window.location.reload()}>Повторить</button></div>}
-      {!userId && <div className="sync-notice">Сейчас запасы хранятся только в этом браузере. <button onClick={() => setAuthOpen(true)}>Войти для синхронизации</button></div>}
+      {!userId && <div className="sync-notice">{pendingInvite ? 'Тебя пригласили в общий холодильник. Войди или создай аккаунт, чтобы присоединиться.' : 'Сейчас запасы хранятся только в этом браузере.'} <button onClick={() => setAuthOpen(true)}>{pendingInvite ? 'Войти и принять приглашение' : 'Войти для синхронизации'}</button></div>}
       {syncing && <div className="sync-notice" role="status">Загружаем запасы из облака…</div>}
-      {userId && cloudLoaded && <FamilyPanel household={household} userId={userId} onChanged={refreshFamily} />}
+      {userId && cloudLoaded && <FamilyPanel household={household} userId={userId} pendingInvite={pendingInvite} onJoined={() => { clearPendingInvite(); setPendingInvite('') }} onChanged={refreshFamily} />}
       <section className="overview"><div><h1>Что у нас<br/><em>в запасе?</em></h1><p>{items.length === 0 ? 'Добавь первый продукт — и мы поможем вспомнить о нём вовремя.' : urgentCount ? `${urgentCount} ${urgentCount === 1 ? 'продукт ждёт' : 'продукта ждут'} внимания в ближайшие дни.` : 'Всё спокойно. Продукты под присмотром.'}</p></div><div className="overview-illustration" aria-hidden="true"><div className="shelf shelf-one"><i></i><i></i><i></i></div><div className="shelf shelf-two"><i></i><i></i></div><div className="shelf shelf-three"><i></i><i></i><i></i></div></div></section>
       <section className="inventory" aria-label="Запасы"><div className="inventory-heading"><div><h2>Мои продукты</h2><p>{items.length} в запасе</p></div><button className="add-button" onClick={openNew} disabled={syncing}><span aria-hidden="true">＋</span> Добавить</button></div>
         <div className="toolbar"><div className="tabs" role="group" aria-label="Место хранения"><button className={place === 'all' ? 'active' : ''} onClick={() => setPlace('all')}>Все</button><button className={place === 'fridge' ? 'active' : ''} onClick={() => setPlace('fridge')}>Холодильник</button><button className={place === 'freezer' ? 'active' : ''} onClick={() => setPlace('freezer')}>Морозилка</button></div><label className="search"><span className="sr-only">Поиск по запасам</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Найти продукт" /></label></div>
